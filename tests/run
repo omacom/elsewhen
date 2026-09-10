@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Runs everything under tests/. CI calls this; so should you, before pushing.
+#
+#   tests/run              # all of it
+#   tests/run --offline    # skip the checks that need the network
+#
+# Each node script is self-contained and exits non-zero on a failure. The
+# currency table is checked against the system's iso-codes data (and, unless
+# --offline, the live FX feed). The QML test needs the Qt 6 qmltestrunner;
+# on Arch that is /usr/lib/qt6/bin/qmltestrunner, not /usr/bin/qmltestrunner,
+# which is the Qt 5 binary and exits 0 having run nothing.
+set -uo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+offline=""
+[[ "${1:-}" == "--offline" ]] && offline="--offline"
+status=0
+
+run() {
+  echo "== $*"
+  if ! "$@"; then
+    echo "!! FAILED: $*"
+    status=1
+  fi
+}
+
+for f in "$root"/tests/*_check.js; do
+  run node "$f"
+done
+
+if [[ -n $offline ]]; then
+  run python3 "$root/tests/currency_check.py" --offline
+else
+  run python3 "$root/tests/currency_check.py"
+fi
+
+qml_test_runner="${QML_TEST_RUNNER:-}"
+if [[ -z $qml_test_runner ]]; then
+  if [[ -x /usr/lib/qt6/bin/qmltestrunner ]]; then
+    qml_test_runner=/usr/lib/qt6/bin/qmltestrunner
+  elif [[ -x /usr/lib/qt6/qmltestrunner ]]; then
+    qml_test_runner=/usr/lib/qt6/qmltestrunner
+  else
+    qml_test_runner="$(command -v qmltestrunner-qt6 || command -v qmltestrunner || true)"
+  fi
+fi
+if [[ -n $qml_test_runner ]]; then
+  run env QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+    "$qml_test_runner" -input "$root/tests/qml" -o -,txt
+else
+  echo "!! qmltestrunner not found; skipping tests/qml"
+  status=1
+fi
+
+exit $status
