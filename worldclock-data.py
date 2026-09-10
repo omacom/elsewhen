@@ -23,7 +23,7 @@ import urllib.request
 
 CACHE = os.path.join(
     os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")),
-    "jbf-worldclock", "data.json",
+    "omacom-elsewhen", "data.json",
 )
 FX_TTL = 6 * 3600
 WX_TTL = 20 * 60
@@ -107,7 +107,7 @@ def save_cache(data):
 
 
 def get_json(url):
-    req = urllib.request.Request(url, headers={"User-Agent": "omarchy-worldclock/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "omarchy-elsewhen/1.0"})
     with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
         return json.loads(resp.read().decode("utf-8"))
 

@@ -1,7 +1,34 @@
-# World Clock
+# Elsewhen
 
-A bar widget for the Omarchy shell: a globe in the sidebar that opens a panel
-of clocks, one row per city.
+A world clock for the Omarchy shell: a globe in the bar that opens a panel of
+clocks, one row per city, with a spinnable globe behind it.
+
+## Installing
+
+```bash
+omarchy plugin add https://github.com/omacom/elsewhen.git --enable
+```
+
+That clones this repository into `~/.config/omarchy/plugins/omacom.elsewhen`
+and places the widget in the bar's right section. Without `--enable` it asks
+first. To take it out again:
+
+```bash
+omarchy plugin remove omacom.elsewhen
+```
+
+Everything it needs is already on an Omarchy install: `date` and `timedatectl`
+for zone offsets, and `python3` (standard library only) for the temperature and
+currency script. That script is the only thing that touches the network, and
+it fetches from [Open-Meteo](https://open-meteo.com) (geocoding, weather) and
+[open.er-api.com](https://www.exchangerate-api.com/docs/free) (exchange rates)
+without an API key; results are cached under `~/.cache/omacom-elsewhen/`. The
+globe's coastlines are [Natural Earth](https://www.naturalearthdata.com) 110m
+(public domain), shipped as `world.json`. Settings live inline on the widget's
+`shell.json` entry; see [Settings](#settings).
+
+`tests/run` runs every check in `tests/`; pass `--offline` to skip the ones
+that need the network.
 
 ## Why it shells out to `date`
 
@@ -894,7 +921,7 @@ stops being a button and the Loader never activates; nothing else changes.
 To remove it outright:
 
 ```bash
-cd ~/.config/omarchy/plugins/jbf.worldclock
+cd ~/.config/omarchy/plugins/omacom.elsewhen
 rm Globe.qml GlobeModel.js world.json cities.json tests/globe_check.js
 ```
 
@@ -1228,9 +1255,9 @@ Inline on the widget's `shell.json` entry:
 ## IPC
 
 ```bash
-omarchy-shell jbf.worldclock toggle
-omarchy-shell jbf.worldclock times                            # JSON, one entry per row
-omarchy-shell jbf.worldclock add America/New_York Miami
-omarchy-shell jbf.worldclock remove America/New_York
-omarchy-shell jbf.worldclock refresh                          # re-probe offsets
+omarchy-shell omacom.elsewhen toggle
+omarchy-shell omacom.elsewhen times                            # JSON, one entry per row
+omarchy-shell omacom.elsewhen add America/New_York Miami
+omarchy-shell omacom.elsewhen remove America/New_York
+omarchy-shell omacom.elsewhen refresh                          # re-probe offsets
 ```

@@ -20,8 +20,8 @@ import "Greetings.js" as Greet
 // and the seconds in between cost nothing.
 Panel {
   id: root
-  moduleName: "jbf.worldclock"
-  ipcTarget: "jbf.worldclock"
+  moduleName: "omacom.elsewhen"
+  ipcTarget: "omacom.elsewhen"
   manageIpc: false
 
   readonly property var zones: Model.parseZones(setting("zones", ""))

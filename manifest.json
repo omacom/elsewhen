@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "jbf.worldclock",
-  "name": "World Clock",
+  "id": "omacom.elsewhen",
+  "name": "Elsewhen",
   "version": "1.0.0",
-  "author": "jbf",
+  "author": "Jason Fried",
   "license": "MIT",
-  "description": "Current time in Los Angeles, Paris, and Tokyo.",
+  "description": "A world clock for the Omarchy shell: the time in several cities at once, with a spinnable globe.",
   "kinds": [
     "bar-widget"
   ],
@@ -13,11 +13,12 @@
     "barWidget": "Panel.qml"
   },
   "barWidget": {
-    "displayName": "World Clock",
-    "description": "A panel showing the time in several cities at once.",
+    "displayName": "Elsewhen",
+    "description": "A world clock: one row per city, and a globe.",
     "category": "Time",
     "aliases": [
       "worldclock",
+      "world clock",
       "timezones",
       "clock"
     ],
@@ -35,7 +36,8 @@
       "workEndHour": 17,
       "showOverlap": false,
       "homeCity": "",
-      "skyTint": false
+      "skyTint": false,
+      "smoothMotion": true
     },
     "schema": [
       {
@@ -113,6 +115,12 @@
         "type": "boolean",
         "label": "Tint city names by their sky",
         "defaultValue": false
+      },
+      {
+        "key": "smoothMotion",
+        "type": "boolean",
+        "label": "Drop labels and detail while the globe moves",
+        "defaultValue": true
       }
     ]
   }
