@@ -1915,6 +1915,9 @@ Panel {
                             Layout.minimumWidth: 0
                             Layout.alignment: Qt.AlignBaseline
                             text: row.rowData.label
+                            // A label is whatever was typed or sent over
+                            // IPC; drawn as text, never parsed as markup.
+                            textFormat: Text.PlainText
                             color: root.skyColorFor(row.modelData)
                             font.family: root.fontFamily
                             font.pixelSize: Style.font.subtitle

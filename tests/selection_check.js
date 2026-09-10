@@ -6,7 +6,7 @@ const fs = require("fs"), path = require("path");
 const root = path.join(__dirname, "..");
 const box = {};
 const src = fs.readFileSync(path.join(root, "Model.js"), "utf8").replace(".pragma library", "");
-new Function(src + "; this.M={parseZones,indexOfZone,indexOfZoneKey,factsKey,moveZone,removeZoneAt,labelForZoneId,addZone,zoneOptions,chipAfterTap,chipAfterRelease,NO_CHIP,arrowBox,arrowCovered};").call(box);
+new Function(src + "; this.M={parseZones,indexOfZone,indexOfZoneKey,factsKey,moveZone,removeZoneAt,labelForZoneId,addZone,serializeZones,zoneOptions,chipAfterTap,chipAfterRelease,NO_CHIP,arrowBox,arrowCovered};").call(box);
 const M = box.M;
 
 let n = 0, f = 0;
@@ -89,6 +89,21 @@ t("a blank name still falls back to the zone",
   M.addZone([], "America/Los_Angeles", "")[0].label, "Los Angeles");
 t("two cities in one zone can both be tracked",
   M.addZone(M.addZone([], "America/Los_Angeles", "Oakland"), "America/Los_Angeles", "Las Vegas").length, 2);
+
+// The IPC `add` takes any two strings. What goes in must come back out of the
+// "Label|Zone, Label|Zone" setting as the row that was asked for.
+const roundTrip = zs => M.parseZones(M.serializeZones(zs));
+t("a label with a comma survives the setting",
+  roundTrip(M.addZone([], "Asia/Tokyo", "Tokyo, Japan")).map(z => z.label + "@" + z.id), ["Tokyo Japan@Asia/Tokyo"]);
+t("a label with a pipe survives the setting",
+  roundTrip(M.addZone([], "Asia/Tokyo", "Tokyo|HQ")).map(z => z.label + "@" + z.id), ["Tokyo HQ@Asia/Tokyo"]);
+t("a label that is only delimiters falls back to the zone's name",
+  M.addZone([], "Asia/Tokyo", ",|,")[0].label, "Tokyo");
+t("an id that could not name a zone is refused", M.addZone([], "evil id, with|pipe", "x").length, 0);
+t("an id with a space is refused", M.addZone([], "Asia/Tokyo x", "x").length, 0);
+t("refusing returns the same array, so nothing is written", (() => { const z = []; return M.addZone(z, "bad id", "x") === z; })(), true);
+t("markup is kept as text for the row to draw plainly",
+  M.addZone([], "Asia/Tokyo", "<img src=x>")[0].label, "<img src=x>");
 // And the picker stops offering the one already taken, by name and not by zone.
 const remaining = M.zoneOptions("America/Los_Angeles", M.addZone([], "America/Los_Angeles", "Oakland"));
 t("the tracked city drops out of the picker",

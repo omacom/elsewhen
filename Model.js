@@ -17,6 +17,18 @@ var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oc
 
 // "Los Angeles|America/Los_Angeles, Tokyo|Asia/Tokyo" -> [{label, id}, ...]
 // A bare "Asia/Tokyo" is accepted too and labelled from its last path segment.
+// What a zone id may contain. Ids are handed to `date` as arguments, never
+// interpolated into a script, so this is not an injection guard - it keeps
+// the list free of entries that could never name a zone.
+var ZONE_ID = /^[A-Za-z0-9_+\-\/]+$/
+
+// Labels are stored in a "Label|Zone, Label|Zone" string, so a label may not
+// carry either delimiter: "Tokyo, Japan" would otherwise come back from
+// shell.json as two rows called "Tokyo" and "Japan".
+function cleanLabel(label) {
+  return String(label || "").replace(/[,|]/g, " ").replace(/\s+/g, " ").trim()
+}
+
 function parseZones(spec) {
   // An empty setting is a fresh install, not a request for the old hardcoded
   // trio: it returns nothing so the panel knows to seed itself. DEFAULT_ZONES
@@ -42,7 +54,7 @@ function parseZones(spec) {
       id = entry
       label = entry.split("/").pop().replace(/_/g, " ")
     }
-    if (id === "" || !/^[A-Za-z0-9_+\-\/]+$/.test(id)) continue
+    if (id === "" || !ZONE_ID.test(id)) continue
     if (label === "") label = id.split("/").pop().replace(/_/g, " ")
     out.push({ label: label, id: id, work: work })
   }
@@ -323,11 +335,6 @@ function serializeZones(zones) {
   return parts.join(", ")
 }
 
-function hasZone(zones, id) {
-  for (var i = 0; i < zones.length; i++) if (zones[i].id === id) return true
-  return false
-}
-
 // Two cities may share a zone, so a listed entry is identified by its label
 // and its zone together.
 function hasEntry(zones, id, label) {
@@ -337,11 +344,13 @@ function hasEntry(zones, id, label) {
 }
 
 // Appends unless the zone is already listed; returns the same array when
-// there is nothing to do so callers can skip a needless write.
+// there is nothing to do so callers can skip a needless write. The picker
+// only ever offers catalogue zones, but the IPC `add` takes whatever it is
+// given, so the id and label are held to what parseZones will read back.
 function addZone(zones, id, label) {
   var zoneId = String(id || "").trim()
-  if (zoneId === "") return zones
-  var name = String(label || "").trim()
+  if (zoneId === "" || !ZONE_ID.test(zoneId)) return zones
+  var name = cleanLabel(label)
   if (name === "") name = labelForZoneId(zoneId)
   if (hasEntry(zones, zoneId, name)) return zones
   var out = zones.slice()
