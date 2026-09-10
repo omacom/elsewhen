@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  manifest:
+    name: Manifest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The same checks `omarchy plugin validate` runs: schema version, required
+      # fields, a well-formed id outside the reserved namespace, entry points
+      # that are safe relative paths and exist, and no symlinks in the tree.
+      - name: Validate manifest.json
+        run: |
+          set -euo pipefail
+          jq -e '.schemaVersion == 1' manifest.json
+          for field in id name version kinds entryPoints; do
+            jq -e --arg f "$field" 'has($f)' manifest.json >/dev/null
+          done
+          jq -e '.id | test("^[A-Za-z0-9][A-Za-z0-9._-]*$")' manifest.json
+          jq -e '.id | (startswith("omarchy.") | not) and (contains("..") | not)' manifest.json
+          jq -e '(.kinds | type) == "array" and (.kinds | length) > 0' manifest.json
+          jq -e '(.entryPoints | type) == "object"' manifest.json
+          jq -e '.barWidget.defaultSection as $s | $s == null or (["left","center","right"] | index($s)) != null' manifest.json
+          jq -r '.entryPoints[]' manifest.json | while IFS= read -r ep; do
+            case "$ep" in
+              /*|*..*) echo "unsafe entry point: $ep"; exit 1 ;;
+            esac
+            test -f "$ep" || { echo "missing entry point: $ep"; exit 1; }
+          done
+          for kind in bar bar-widget menu overlay panel service; do
+            jq -e --arg k "$kind" '(.kinds | index($k)) == null' manifest.json >/dev/null && continue
+            key="$kind"; [[ $kind == bar-widget ]] && key=barWidget
+            jq -e --arg k "$key" '.entryPoints | has($k)' manifest.json >/dev/null \
+              || { echo "kind '$kind' has no entryPoints.$key"; exit 1; }
+          done
+          link=$(find . -name .git -prune -o -type l -print -quit)
+          [[ -z $link ]] || { echo "symlink in plugin tree: $link"; exit 1; }
+      - name: Data files parse
+        run: |
+          jq -e 'type == "array" and length > 0' cities.json >/dev/null
+          jq -e 'type == "array" and length > 0' world.json >/dev/null
+      - name: Python compiles
+        run: python3 -m py_compile worldclock-data.py tests/currency_check.py
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Qt test runner and iso-codes
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            iso-codes \
+            qt6-declarative-dev-tools \
+            qml6-module-qtqml-workerscript \
+            qml6-module-qtquick \
+            qml6-module-qtquick-window \
+            qml6-module-qttest
+      # --offline keeps the run deterministic: the live-rate and Open-Meteo
+      # cross-checks are worth running by hand but should not fail a PR when
+      # a third-party feed hiccups.
+      - name: Run tests
+        run: ./tests/run --offline
