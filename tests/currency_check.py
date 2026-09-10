@@ -32,6 +32,10 @@ spec.loader.exec_module(wcdata)
 
 ISO_DIR = "/usr/share/iso-codes/json"
 ALLOWED_NON_ISO_COUNTRIES = {"XK"}  # user-assigned, Kosovo
+# Newer than the iso-codes a distribution may still ship. ZWG (Zimbabwe Gold)
+# entered ISO 4217 in 2024; Ubuntu 24.04's package predates it. The live-rate
+# check below still has to know these, so a retired one would not go unseen.
+ALLOWED_NEWER_CURRENCIES = {"ZWG"}
 
 
 def main():
@@ -43,7 +47,8 @@ def main():
     countries = {c["alpha_2"] for c in json.load(
         open(os.path.join(ISO_DIR, "iso_3166-1.json")))["3166-1"]}
 
-    retired = sorted({v for v in mapping.values() if v not in currencies})
+    retired = sorted({v for v in mapping.values()
+                      if v not in currencies and v not in ALLOWED_NEWER_CURRENCIES})
     if retired:
         failures.append(f"not current ISO 4217 codes: {retired}")
 
