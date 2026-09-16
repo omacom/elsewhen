@@ -66,4 +66,18 @@ for bad in 1.2.3.rc1 v1.2.3 1.2 "" 1.2.3-; do
     || fail "rejected '$bad' but changed the tree"
 done
 
+# The one "version" line must be unique: a second one anywhere in the
+# manifest, say under a nested object, means the script no longer knows which
+# to rewrite and must refuse rather than touch both.
+(cd "$copy" && git checkout -q -- manifest.json)
+sed -i 's/^  "author": /  "nested": {\n    "version": "0.0.0"\n  },\n  "author": /' "$copy/manifest.json"
+jq -e . "$copy/manifest.json" >/dev/null || fail "the duplicate-version fixture is not valid JSON"
+if (cd "$copy" && ./scripts/set-version.sh "$test_version" 2>/dev/null); then
+  fail "accepted a manifest with two version lines"
+fi
+[[ $(jq -r '.version' "$copy/manifest.json") == "$original_version" ]] \
+  || fail "refused the duplicate-version manifest but rewrote it anyway"
+[[ $(jq -r '.nested.version' "$copy/manifest.json") == "0.0.0" ]] \
+  || fail "refused the duplicate-version manifest but rewrote the nested line"
+
 printf 'set-version round trip: ok\n'
