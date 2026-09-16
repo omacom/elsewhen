@@ -80,6 +80,13 @@ jobs:
             exit 1
           fi
 
+      - name: Require the version to move forward
+        # Above every existing v* tag and not below the manifest, so a
+        # mistyped version cannot become the "latest" release.
+        env:
+          VERSION: ${{ inputs.version }}
+        run: ./scripts/check-version-bump.sh "$VERSION"
+
       - name: Set the release version
         env:
           VERSION: ${{ inputs.version }}

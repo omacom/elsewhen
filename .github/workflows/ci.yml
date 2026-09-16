@@ -22,6 +22,10 @@ jobs:
       # release version rewrite is surgical and round-trips byte-for-byte.
       - name: Set-version round trip
         run: ./tests/test-set-version.sh
+      # Tags of the test's own making, so the release guard is proven without
+      # touching this repository's tags.
+      - name: Version bump guard
+        run: ./tests/test-check-version-bump.sh
       - name: Data files parse
         run: |
           jq -e 'type == "array" and length > 0' cities.json >/dev/null
