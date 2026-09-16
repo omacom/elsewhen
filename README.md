@@ -5,8 +5,8 @@ clocks, one row per city, with a spinnable globe behind it.
 
 ## Installing
 
-On Omarchy, Elsewhen is the `elsewhen` package: installed by default, kept
-current by `omarchy update`, and living in
+Newer Omarchy installs carry Elsewhen as the `elsewhen` package: installed
+by default, kept current by `omarchy update`, and living in
 `/usr/share/omarchy/plugins/omacom.elsewhen`. There is nothing to add.
 
 On an Omarchy from before the package, or to hack on it, the plugin can be
@@ -1276,9 +1276,12 @@ omarchy-shell omacom.elsewhen refresh                          # re-probe offset
 
 Releases are cut from GitHub: Actions, Release, Run workflow, with `version`
 set to the new version and no leading `v` (`0.2.0`, or `0.2.0-rc.1` for a
-prerelease). The `cut` job runs on `main` and refuses any other branch. It
-writes the version into `manifest.json` with `scripts/set-version.sh` - the
-only place a version is recorded - runs `scripts/check-manifest.sh` and
+prerelease). The `cut` job runs on `main` and refuses any other branch, a
+tag that already exists, and a version that is not above every existing tag
+and at least the manifest's own, so a mistyped version cannot become the
+latest release. It writes the version into `manifest.json` with
+`scripts/set-version.sh` - the only place a version is recorded - runs
+`scripts/check-manifest.sh` and
 `tests/run --offline`, commits `Release vX.Y.Z` as `github-actions[bot]` if
 that changed anything, tags the commit `vX.Y.Z`, and pushes both. When `main`
 already carries the version, as it did for `0.1.0`, there is nothing to
