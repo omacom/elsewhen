@@ -5,13 +5,23 @@ clocks, one row per city, with a spinnable globe behind it.
 
 ## Installing
 
+Newer Omarchy installs carry Elsewhen as the `elsewhen` package: installed
+by default, kept current by `omarchy update`, and living in
+`/usr/share/omarchy/plugins/omacom.elsewhen`. There is nothing to add.
+
+On an Omarchy from before the package, or to hack on it, the plugin can be
+added from this repository instead:
+
 ```bash
 omarchy plugin add https://github.com/omacom/elsewhen.git --enable
 ```
 
 That clones this repository into `~/.config/omarchy/plugins/omacom.elsewhen`
 and places the widget in the bar's right section. Without `--enable` it asks
-first. To take it out again:
+first. While the package is installed the shell prefers the packaged copy: a
+checkout under `~/.config/omarchy/plugins` with the same id is rejected with
+a warning, so it only takes effect where the package is absent. To take it
+out again:
 
 ```bash
 omarchy plugin remove omacom.elsewhen
@@ -1261,3 +1271,37 @@ omarchy-shell omacom.elsewhen add America/New_York Miami
 omarchy-shell omacom.elsewhen remove America/New_York
 omarchy-shell omacom.elsewhen refresh                          # re-probe offsets
 ```
+
+## Releasing
+
+Releases are cut from GitHub: Actions, Release, Run workflow, with `version`
+set to the new version and no leading `v` (`0.2.0`, or `0.2.0-rc.1` for a
+prerelease). The `cut` job runs on `main` and refuses any other branch, a
+tag that already exists, and a version that is not above every existing tag
+and at least the manifest's own, so a mistyped version cannot become the
+latest release. It writes the version into `manifest.json` with
+`scripts/set-version.sh` - the only place a version is recorded - runs
+`scripts/check-manifest.sh` and
+`tests/run --offline`, commits `Release vX.Y.Z` as `github-actions[bot]` if
+that changed anything, tags the commit `vX.Y.Z`, and pushes both. When `main`
+already carries the version, as it did for `0.1.0`, there is nothing to
+commit and the tag goes on the existing head.
+
+The `publish` job then runs in the same workflow run, because a push made
+with the workflow's own token does not start another one. It checks out the
+tag, requires its commit to be on `main` and the tag to equal `v` plus the
+manifest's version, runs the same checks again, and creates the GitHub
+release with generated notes. A version with a `-` in it is marked a
+prerelease, which `omarchy-pkgs` skips when it looks for the latest release;
+that is also why `set-version.sh` refuses a `.`-introduced suffix like
+`0.2.0.rc1`, which would slip past. Nothing is attached to the release:
+`omarchy-pkgs` builds the `elsewhen` package from the tag's source archive,
+so the tag is the release.
+
+Pushing a `vX.Y.Z` tag by hand skips `cut` and publishes that tag the same
+way. If `cut` succeeds and `publish` fails, re-run the failed job of that same
+run from the Actions page; the commit and tag are already on `main`, so
+dispatching the workflow again with the same version stops at the
+tag-already-exists check, and bumping past it would leave the first version
+unpublished. The repository has to be public before `omarchy-pkgs` can fetch
+the archive at all.

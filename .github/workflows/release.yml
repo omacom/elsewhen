@@ -1,0 +1,248 @@
+name: Release
+
+# Two ways in:
+#   1. workflow_dispatch (`cut`): sets the version in manifest.json on `main`,
+#      commits that if it changed anything, tags, and pushes. That push uses
+#      the default GITHUB_TOKEN, which GitHub deliberately does not let
+#      trigger further workflow runs -- so `publish` runs in this SAME run
+#      right after `cut`, rather than relying on the tag push to start a
+#      second run.
+#   2. push of a `v*` tag (e.g. a tag pushed by a maintainer directly):
+#      `cut` is skipped and `publish` runs against that tag.
+#
+# There is no build step and no packaged asset. omarchy-pkgs builds the
+# `elsewhen` package from the tag's source archive
+# (https://github.com/omacom/elsewhen/archive/refs/tags/vX.Y.Z.tar.gz), so
+# the tag itself is the release artifact; the GitHub release only marks it
+# as published (and, for a `-` version, as a prerelease to be skipped).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without a leading v (e.g. 1.2.3)"
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  cut:
+    # Only the manual entry point cuts a release; a direct tag push has
+    # already done the equivalent of this job by hand.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - name: Require a release cut from main
+        if: github.ref != 'refs/heads/main'
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          echo "::error::Release cuts must run from refs/heads/main (got $REF)"
+          exit 1
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Compute release tag
+        id: tag
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          tag="v$VERSION"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Fail if the tag already exists
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::tag $TAG already exists locally"
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "::error::tag $TAG already exists on origin"
+            exit 1
+          fi
+
+      - name: Require the version to move forward
+        # Above every existing v* tag and not below the manifest, so a
+        # mistyped version cannot become the "latest" release.
+        env:
+          VERSION: ${{ inputs.version }}
+        run: ./scripts/check-version-bump.sh "$VERSION"
+
+      - name: Set the release version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: ./scripts/set-version.sh "$VERSION"
+
+      - name: Validate manifest.json
+        run: ./scripts/check-manifest.sh
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+
+      - name: Install Qt test runner and iso-codes
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            iso-codes \
+            qt6-declarative-dev-tools \
+            qml6-module-qtqml-workerscript \
+            qml6-module-qtquick \
+            qml6-module-qtquick-window \
+            qml6-module-qttest
+
+      - name: Run tests
+        run: ./tests/run --offline
+
+      - name: Commit and tag the release
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # main may already carry this version: the first release, 0.1.0,
+          # was written into manifest.json by hand before this workflow
+          # existed. Then there is nothing to commit and the tag goes on the
+          # existing HEAD; the branch push below is a no-op for that case.
+          if git diff --quiet; then
+            echo "main is already at $TAG; tagging HEAD as it is"
+          else
+            git diff --stat
+            git add -u
+            git commit -m "Release $TAG"
+          fi
+          git tag -a "$TAG" -m "Release $TAG"
+
+      - name: Push the release commit and tag
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: git push --atomic origin HEAD:refs/heads/main "refs/tags/$TAG"
+
+  publish:
+    needs: cut
+    # Runs whether `cut` just ran (workflow_dispatch) or was skipped (a
+    # direct tag push); does not run if `cut` ran and failed.
+    if: |
+      always() &&
+      (needs.cut.result == 'success' || needs.cut.result == 'skipped')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve the release tag
+        id: resolve
+        env:
+          CUT_TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          if [[ -n "$CUT_TAG" ]]; then
+            tag="$CUT_TAG"
+          else
+            tag="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ steps.resolve.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Require the tag to be on main
+        # The dispatch path only ever tags a commit `cut` just pushed to
+        # main, so this always holds there; it's the tag-push path (a
+        # maintainer pushing a `v*` tag directly, bypassing `cut`) that this
+        # guards: publishing must not happen from a commit main hasn't seen.
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::tag $TAG is not an ancestor of origin/main; refusing to publish"
+            exit 1
+          fi
+
+      - name: Verify the tag matches the manifest version
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          manifest_version=$(jq -r '.version' manifest.json)
+          [[ $TAG == "v$manifest_version" ]] || {
+            echo "::error::tag $TAG does not match manifest.json version $manifest_version"
+            exit 1
+          }
+
+      - name: Validate manifest.json
+        run: ./scripts/check-manifest.sh
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+
+      - name: Install Qt test runner and iso-codes
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            iso-codes \
+            qt6-declarative-dev-tools \
+            qml6-module-qtqml-workerscript \
+            qml6-module-qtquick \
+            qml6-module-qtquick-window \
+            qml6-module-qttest
+
+      - name: Run tests
+        run: ./tests/run --offline
+
+      - name: Determine the prerelease flag
+        id: prerelease
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          if [[ $TAG == *-* ]]; then
+            echo "flag=--prerelease" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Fail if a release for this tag already exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::a release for $TAG already exists"
+            exit 1
+          fi
+
+      - name: Create the GitHub release
+        # No assets: omarchy-pkgs consumes the tag's source archive, so the
+        # tag is the artifact and the release is the signal that it's ready.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+          PRERELEASE_FLAG: ${{ steps.prerelease.outputs.flag }}
+        run: |
+          # shellcheck disable=SC2086
+          gh release create "$TAG" \
+            --verify-tag \
+            --title "$TAG" \
+            --generate-notes \
+            $PRERELEASE_FLAG
