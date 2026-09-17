@@ -1102,7 +1102,13 @@ the arithmetic left it. At rest a `Binding` holds the globe there, standing
 down while the animation is writing the property. Until the fetcher has
 geocoded your city the marker is hidden and it rests on Greenwich.
 
-The sidebar icon carries the same tilt, via `WidgetButton.textRotation`.
+The sidebar icon does not carry the tilt. It did, via
+`WidgetButton.textRotation`, and it came out as a dotted blob: the bar draws
+its glyphs with native text rendering at about thirteen pixels, and the globe
+glyph's lattice does not survive being turned off the pixel grid. Qt's other
+render types were tried on the same glyph at the same angle and none of them
+resolved the graticule either, so the icon stands upright and the lean is left
+to the drawn globe, which is large enough to carry it.
 
 Opening the panel spins it three turns. `Easing.OutQuart` over 1250ms puts
 most of the rotation in the first third and lets the rest coast out, which is

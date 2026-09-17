@@ -1120,8 +1120,11 @@ Panel {
     anchors.fill: parent
     bar: root.bar
     text: ""
-    // Leaned over like the real thing, same obliquity as the panel globe.
-    textRotation: Solar.AXIAL_TILT
+    // Upright, unlike the panel globe. The bar draws this glyph with native
+    // text rendering at about thirteen pixels, and a lattice that fine does
+    // not survive being turned off the pixel grid: leaned over by the earth's
+    // obliquity it shreds into a dotted blob. The lean lives on the hero
+    // globe, which is drawn and large enough to carry it.
     tooltipText: "World clock"
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.RightButton || buttonCode === Qt.MiddleButton) root.refresh()
