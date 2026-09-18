@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "omacom.elsewhen",
   "name": "Elsewhen",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "author": "Jason Fried",
   "license": "MIT",
   "description": "A world clock for the Omarchy shell: the time in several cities at once, with a spinnable globe.",
